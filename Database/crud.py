@@ -1,6 +1,14 @@
 from sqlalchemy.orm import Session
-from database import Conta, Categorias, Investimentos, Transacoes,Cartoes , Faturas
-from database import _Sessao
+from Database.database import (
+    Conta,
+    Categorias,
+    Investimentos,
+    Transacoes,
+    Cartoes,
+    Faturas
+)
+
+from Database.database import _Sessao
 from datetime import datetime
 
 # CONTAS #

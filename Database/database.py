@@ -134,7 +134,7 @@ class Faturas(Base):
     __tablename__ = 'Faturas'
 
     id = Column(Integer, primary_key=True)
-    cartão_id = Column(Integer, ForeignKey("cartoes.id"))
+    cartao_id = Column(Integer, ForeignKey("cartoes.id"))
     Mês = Column(String(40))
     Ano = Column(String(40))
     Valor = Column(Numeric(10, 2))
@@ -144,7 +144,7 @@ class Faturas(Base):
     cartao = relationship("Cartões", back_populates="faturas")  # <-- Relacionamento com a tabela Cartões
 
     def __repr__(self):
-        return f"Faturas(id={self.id}, cartão_id={self.cartão_id}, Mês='{self.Mês}', Ano='{self.Ano}', Valor={self.Valor}, data_vencimento='{self.data_vencimento}', Status='{self.Status}')"
+        return f"Faturas(id={self.id}, cartao_id={self.cartao_id}, Mês='{self.Mês}', Ano='{self.Ano}', Valor={self.Valor}, data_vencimento='{self.data_vencimento}', Status='{self.Status}')"
 
 
 
