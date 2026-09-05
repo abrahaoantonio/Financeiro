@@ -1,31 +1,42 @@
-from sqlalchemy import create_engine, Column, String, Integer, Numeric, Date
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import ForeignKey, create_engine, Column, String, Integer, Numeric, Date
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
 
 engine = create_engine('sqlite:///Financeiro.db')
 Base = declarative_base()
-_Sessao = sessionmaker(engine)
+_Sessao = sessionmaker(bind=engine,autoflush=False,autocommit=False)
+
+
+
+######     CONTA     ######
 
 
 class Conta(Base):
 
-    __tablename__ = 'Contas'
+    __tablename__ = 'contas'
 
 
     id = Column(Integer, primary_key=True)
     nome = Column(String(40), unique=True, nullable=False)
     tipo = Column(String(40))
-    saldo = Column(Numeric(10, 2))
-    data_criação = Column(String(40))
+    saldo = Column(Numeric(10, 2), default=0.00)
+    data_criação = Column(Date)
+
+    cartoes = relationship(
+        "Cartao",
+        back_populates="conta"
+    )   # <-- Relacionamento com a tabela Cartões
+
+    transacoes = relationship(
+        "Transacao",
+        back_populates="conta"
+    ) # <-- Relacionamento com a tabela Transações
 
     def __repr__(self):
         return f"Conta(id={self.id}, nome='{self.nome}', tipo='{self.tipo}', saldo={self.saldo}, data_criação='{self.data_criação}')"
 
-Base.metadata.create_all(engine)   
 
-with _Sessao() as sessao:
-    conta1 = Conta(nome='Inter', tipo='Corrente', saldo=1474.90, data_criação='2026-09-01')
-    sessao.add(conta1)
-    sessao.commit()
+######     CATEGORIAS     ######
 
 
 class Categorias(Base):
@@ -36,50 +47,125 @@ class Categorias(Base):
     nome = Column(String(40), unique=True, nullable=False)
     tipo = Column(String(40))
 
+    transacoes = relationship(
+        "Transacao",
+        back_populates="categoria"
+    )
+
     def __repr__(self):
         return f"Categorias(id={self.id}, nome='{self.nome}', tipo='{self.tipo}')"
 
-Base.metadata.create_all(engine)
 
-with _Sessao() as sessao:
-    categoria1 = Categorias(nome='Alimentação', tipo='Despesa')
-    sessao.add(categoria1)
-    categoria2 = Categorias(nome='Salário', tipo='Receita')
-    sessao.add(categoria2)
-    categoria3 = Categorias(nome='Transporte', tipo='Despesa')
-    sessao.add(categoria3)
-    categoria4 = Categorias(nome='Investimentos', tipo='investimento')
-    sessao.add(categoria4)
-    categoria5 = Categorias(nome='Lazer', tipo='Despesa')
-    sessao.add(categoria5)  
-    sessao.commit()
+
+#####     TRANSAÇÕES     ######
 
 
 class Transacoes(Base):
 
-    __tablename__ = 'Transações'
+    __tablename__ = 'transacoes'
 
     id = Column(Integer, primary_key=True)
-    conta_id = Column(Integer)
-    categoria_id = Column(Integer)
+    conta_id = Column(Integer, ForeignKey("contas.id"))
+    categoria_id = Column(Integer, ForeignKey("categorias.id"))
     descricao = Column(String(100))
     valor = Column(Numeric(10, 2))
     tipo = Column(String(40))
-    tipo_transacao = Column(String(40))
+    Categoria = Column(String(40))
     parcelas = Column(Integer)
     data = Column(String(40))
 
+    conta = relationship(
+        "Conta",
+        back_populates="transacoes"
+    )   # <-- Relacionamento com a tabela Contas
+
+    categoria = relationship(
+        "Categoria",
+        back_populates="transacoes"
+    )   # <-- Relacionamento com a tabela Categorias
+
+    investimentos = relationship(
+        "Investimentos",
+        back_populates="transacao"
+    )
+
     def __repr__(self):
-        return f"Transacoes(id={self.id}, conta_id={self.conta_id}, categoria_id={self.categoria_id}, descricao='{self.descricao}', valor={self.valor}, tipo='{self.tipo}', tipo_transacao='{self.tipo_transacao}', parcelas={self.parcelas}, data='{self.data}')"
+        return f"Transacoes(id={self.id}, conta_id={self.conta_id}, categoria_id={self.categoria_id}, descricao='{self.descricao}', valor={self.valor}, tipo='{self.tipo}', Categoria='{self.Categoria}', parcelas={self.parcelas}, data='{self.data}')"
+
+
+
+#####     CARTÕES    ##### 
+
+
+class Cartoes(Base):
+
+    __tablename__ = 'cartoes'
+
+    id = Column(Integer, primary_key=True)
+    conta_id = Column(Integer,ForeignKey("contas.id"))
+    categoria_id = Column(Integer,ForeignKey("categorias.id"))
+    descricao = Column(String(100))
+    valor = Column(Numeric(10, 2))
+    tipo = Column(String(40))
+    parcelas = Column(Integer)
+    data = Column(Date)
+
+    conta = relationship(
+        "Conta",
+        back_populates="transacoes"
+    )  #<-- Relacionamento com a tabela Contas
+
+    categoria = relationship(
+        "Categoria",
+        back_populates="transacoes"
+    )  # <-- Relacionamento com a tabela Faturas
+
+    def __repr__(self):
+        return f"Cartoes(id={self.id}, Nome='{self.Nome}', Limite={self.Limite}, dia_fechamento='{self.dia_fechamento}', dia_vencimento='{self.dia_vencimento}', contas_id={self.contas_id})"
+
+
+
+
+# FATURAS #
+
+
+class Faturas(Base):
+
+    __tablename__ = 'Faturas'
+
+    id = Column(Integer, primary_key=True)
+    cartão_id = Column(Integer, ForeignKey("cartoes.id"))
+    Mês = Column(String(40))
+    Ano = Column(String(40))
+    Valor = Column(Numeric(10, 2))
+    data_vencimento = Column(String(40))
+    Status = Column(String(40))
+
+    cartao = relationship("Cartões", back_populates="faturas")  # <-- Relacionamento com a tabela Cartões
+
+    def __repr__(self):
+        return f"Faturas(id={self.id}, cartão_id={self.cartão_id}, Mês='{self.Mês}', Ano='{self.Ano}', Valor={self.Valor}, data_vencimento='{self.data_vencimento}', Status='{self.Status}')"
+
+
+
+
+# Investimentos #
+
+class Investimentos(Base):
+
+    __tablename__ = 'Investimentos'
+
+    id = Column(Integer, primary_key=True)
+    nome = Column(String(40), unique=True, nullable=False)
+    tipo = Column(String(40))   
+    Valor = Column(Numeric(10, 2))
+    transacao_id = Column(Integer, ForeignKey("transacoes.id"))
+
+    transacao = relationship("Transacoes", back_populates="investimentos")  # <-- Relacionamento com a tabela Transações
+
 
 
 Base.metadata.create_all(engine)
-
-with _Sessao() as sessao:
-    transacao1 = Transacoes(conta_id=1, categoria_id=1, descricao='Compra no supermercado', valor=150.00, tipo='Despesa', tipo_transacao='Débito', parcelas=1, data='2026-09-03')
-    sessao.add(transacao1)
-    sessao.commit()
-
 
 
 
