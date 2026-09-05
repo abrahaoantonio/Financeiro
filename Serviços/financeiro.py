@@ -1,4 +1,6 @@
 from Database import crud
+from datetime import date
+from Database import database
 
 ##### Conta ######
 
@@ -399,6 +401,238 @@ def calcular_taxa_invest(receitas, despesas):
     saldo = calcular_saldo(receitas, despesas)
 
     return (saldo / receitas) * 100
+
+
+### Regras faturas ###
+
+
+def calcular_total_fatura(fatura_id):
+
+    fatura = crud.buscar_fatura(fatura_id)
+
+    if fatura is None:
+        raise ValueError('Fatura não encontrada.')
+
+    transacoes = crud.listar_transacoes(fatura_id)
+
+    total = sum(transacao.valor for transacao in transacoes)
+
+    return total
+
+def fechar_fatura(fatura_id):
+
+    fatura = crud.buscar_fatura(fatura_id)
+
+    if fatura is None:
+        raise ValueError('Fatura não encontrada.')
+
+    if fatura.Status == "Fechada":
+        raise ValueError('A fatura está fechada')
+
+    if fatura.Status == "Paga":
+        raise ValueError('Fatura paga.')
+
+    total = calcular_total_fatura(fatura_id)
+
+    return crud.atualizar_fatura(id=fatura_id,
+                                 Valor=total,
+                                 Status="Fechada")
+
+def pagar_fatura(fatura_id):
+
+    fatura = crud.buscar_fatura(fatura_id)
+
+    if fatura is None:
+        raise ValueError('Fatura não encontrada')
+
+    if fatura.Status == "Paga":
+        raise ValueError('A Fatura já foi paga')
+
+    if fatura.Status != "Fechada":
+        raise ValueError('A fatura precisa estar fechada para ser paga.')
+
+    return crud.atualizar_fatura(id=fatura_id, Status="Paga")
+
+def verificar_faturas_atrasadas():
+
+    faturas = crud.listar_faturas()
+
+    hoje = date.today()
+
+    for fatura in faturas:
+        if (fatura.data_vencimento < hoje and fatura.Status != "Paga" and fatura.Status !="Atrasada"):
+
+            crud.atualizar_fatura(id=fatura.id, Status="Atrasada")
+
+def obter_fatura_atual(cartao_id):
+    faturas = crud.listar_faturas(cartao_id)
+
+    for fatura in faturas:
+
+        if fatura.Status == "Aberta":
+            return fatura
+        
+    return None
+
+def obter_proxima_fatura(cartao_id):
+    faturas = crud.listar_faturas()
+
+    faturas_cartao = [fatura for fatura in faturas if fatura.cartao_id == cartao_id]
+
+    faturas_cartao.sort(key=lambda fatura:(
+        int(fatura.ano),
+        int(fatura.Mês)
+    ))
+
+    for i, fatura in enumerate(faturas_cartao):
+        if fatura.Status == "Aberta":
+
+            if i + 1 < len(faturas_cartao):
+                return faturas_cartao[ i + 1]
+            
+            return None
+        
+        return None
+
+#### Regras parcelamento ######
+
+def criar_parcelamento(descricao,Valor_total,quantidade_parcelas,data_primeira_parcela,conta_id=None,cartao_id=None):
+
+    if Valor_total <= 0:
+        raise ValueError('O Valor tem que ser maior que zero.')
+
+    if quantidade_parcelas <= 0:
+        raise ValueError('A quantidade de parcelas tem que ser maior que zero')
+
+    if conta_id is None and cartao_id is None:
+        raise ValueError('Informe uma conta ou um cartao valido.')
+
+    valor_parcela = Valor_total / quantidade_parcelas
+
+    db = database._Session()
+
+    try:
+        parcelamento = crud.criar_parcelamento(
+            db=db,
+            descricao=descricao,
+            valor_total=Valor_total,
+            quantidade_parcelas=quantidade_parcelas,
+            valor_parcela=valor_parcela,
+            data_primeira_parcela=data_primeira_parcela,
+            conta_id=conta_id,
+            cartao_id=cartao_id
+        )
+
+
+        db.commit()
+
+        return parcelamento
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+def buscar_parcelamento(parcelamento_id):
+
+    db = database._Sessao()
+
+    try:
+        return crud.buscar_parcelamento(db=db,
+                                        parcelamento_id=parcelamento_id)
+
+    finally:
+        db.close()
+
+def listar_parcelamentos():
+
+    db = database._Sessao()
+
+    try:
+        return crud.listar_parcelamentos(db)
+    
+    finally:
+        db.close()
+
+def atualizar_parcelamento(parcelamento_id,descricao=None,valor_total=None,quantidade_parcelas=None):
+
+    db = database._Sessao()
+
+    try:
+        parcelamento = crud.buscar_parcelamento(
+            db=db,
+            parcelamento_id=parcelamento_id)
+
+        if not parcelamento:
+            raise ValueError("Parcelamento não encontrado.")
+
+        if valor_total is not None and valor_total <= 0:
+            raise ValueError("O valor total deve ser maior que zero.")
+
+        if quantidade_parcelas is not None and quantidade_parcelas <= 0:
+            raise ValueError(
+                "A quantidade de parcelas deve ser maior que zero."
+            )
+
+        if valor_total is not None:
+            parcelamento.valor_total = valor_total
+
+        if quantidade_parcelas is not None:
+            parcelamento.quantidade_parcelas = quantidade_parcelas
+
+        if valor_total is not None or quantidade_parcelas is not None:
+            parcelamento.valor_parcela = (parcelamento.valor_total / parcelamento.quantidade_parcelas)
+
+
+        if descricao is not None:
+            parcelamento.descricao = descricao
+
+        db.commit()
+        db.refresh(parcelamento)
+
+        return parcelamento
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+def excluir_parcelamento(parcelamento_id):
+
+    db = database._Sessao()
+
+
+    try:
+        parcelamento = crud.buscar_parcelamento(
+            db=db,
+            parcelamento_id=parcelamento_id
+        )
+
+        if not parcelamento:
+            raise ValueError("Parcelamento não encontrado.")
+
+        crud.excluir_parcelamento(
+            db=db,
+            parcelamento_id=parcelamento_id
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+
+
+    
 
 
 
