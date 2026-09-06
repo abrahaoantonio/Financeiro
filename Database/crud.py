@@ -422,3 +422,139 @@ def excluir_investimento(id):
         return True
     finally:
         db.close()
+
+### parcelamento ###
+
+def criar_parcelamento(descricao,Valor_total,quantidade_parcelas,data_primeira_parcela,conta_id=None,cartao_id=None):
+
+        if Valor_total <= 0:
+            raise ValueError('O Valor tem que ser maior que zero.')
+    
+        if quantidade_parcelas <= 0:
+            raise ValueError('A quantidade de parcelas tem que ser maior que zero')
+    
+        if conta_id is None and cartao_id is None:
+            raise ValueError('Informe uma conta ou um cartao valido.')
+
+        valor_parcela = Valor_total / quantidade_parcelas
+    
+        db = _Sessao()
+    
+        try:
+            parcelamento = criar_parcelamento(
+                db=db,
+                descricao=descricao,
+                valor_total=Valor_total,
+                quantidade_parcelas=quantidade_parcelas,
+                valor_parcela=valor_parcela,
+                data_primeira_parcela=data_primeira_parcela,
+                conta_id=conta_id,
+                cartao_id=cartao_id
+            )
+    
+    
+            db.commit()
+    
+            return parcelamento
+    
+        except Exception:
+            db.rollback()
+            raise
+    
+        finally:
+            db.close()
+
+def buscar_parcelamento(parcelamento_id):
+
+    db = _Sessao()
+
+    try:
+        return buscar_parcelamento(db=db,
+                                        parcelamento_id=parcelamento_id)
+
+    finally:
+        db.close()
+
+def listar_parcelamentos():
+
+    db = _Sessao()
+
+    try:
+        return listar_parcelamentos(db)
+    
+    finally:
+        db.close()
+
+def atualizar_parcelamento(parcelamento_id,descricao=None,valor_total=None,quantidade_parcelas=None):
+
+    db = _Sessao()
+
+    try:
+        parcelamento = buscar_parcelamento(
+            db=db,
+            parcelamento_id=parcelamento_id)
+
+        if not parcelamento:
+            raise ValueError("Parcelamento não encontrado.")
+
+        if valor_total is not None and valor_total <= 0:
+            raise ValueError("O valor total deve ser maior que zero.")
+
+        if quantidade_parcelas is not None and quantidade_parcelas <= 0:
+            raise ValueError(
+                "A quantidade de parcelas deve ser maior que zero."
+            )
+
+        if valor_total is not None:
+            parcelamento.valor_total = valor_total
+
+        if quantidade_parcelas is not None:
+            parcelamento.quantidade_parcelas = quantidade_parcelas
+
+        if valor_total is not None or quantidade_parcelas is not None:
+            parcelamento.valor_parcela = (parcelamento.valor_total / parcelamento.quantidade_parcelas)
+
+
+        if descricao is not None:
+            parcelamento.descricao = descricao
+
+        db.commit()
+        db.refresh(parcelamento)
+
+        return parcelamento
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+def excluir_parcelamento(parcelamento_id):
+
+    db = _Sessao()
+
+
+    try:
+        parcelamento = buscar_parcelamento(
+            db=db,
+            parcelamento_id=parcelamento_id
+        )
+
+        if not parcelamento:
+            raise ValueError("Parcelamento não encontrado.")
+
+        excluir_parcelamento(
+            db=db,
+            parcelamento_id=parcelamento_id
+        )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+

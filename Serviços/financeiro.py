@@ -496,138 +496,305 @@ def obter_proxima_fatura(cartao_id):
 
 #### Regras parcelamento ######
 
-def criar_parcelamento(descricao,Valor_total,quantidade_parcelas,data_primeira_parcela,conta_id=None,cartao_id=None):
 
-    if Valor_total <= 0:
-        raise ValueError('O Valor tem que ser maior que zero.')
 
+
+### PARCELAMENTO ####
+
+
+def calcular_valor_parcela(valor_total, quantidade_parcelas):
+    
     if quantidade_parcelas <= 0:
-        raise ValueError('A quantidade de parcelas tem que ser maior que zero')
+        return None
 
-    if conta_id is None and cartao_id is None:
-        raise ValueError('Informe uma conta ou um cartao valido.')
-
-    valor_parcela = Valor_total / quantidade_parcelas
-
-    db = database._Session()
-
-    try:
-        parcelamento = crud.criar_parcelamento(
-            db=db,
-            descricao=descricao,
-            valor_total=Valor_total,
-            quantidade_parcelas=quantidade_parcelas,
-            valor_parcela=valor_parcela,
-            data_primeira_parcela=data_primeira_parcela,
-            conta_id=conta_id,
-            cartao_id=cartao_id
-        )
+    return valor_total / quantidade_parcelas
 
 
-        db.commit()
+def criar_parcelamento(descricao,valor_total,quantidade_parcelas,data_inicio,cartao_id=None,conta_id=None):
 
-        return parcelamento
+    valor_parcela = calcular_valor_parcela(valor_total,quantidade_parcelas)
 
-    except Exception:
-        db.rollback()
-        raise
+    if valor_parcela is None:
+        return None
 
-    finally:
-        db.close()
+    parcelamento = crud.criar_parcelamento(
+        descricao=descricao,
+        valor_total=valor_total,
+        quantidade_parcelas=quantidade_parcelas,
+        valor_parcela=valor_parcela,
+        data_inicio=data_inicio,
+        cartao_id=cartao_id,
+        conta_id=conta_id
+    )
+
+    return parcelamento
 
 
 def buscar_parcelamento(parcelamento_id):
-
-    db = database._Sessao()
-
-    try:
-        return crud.buscar_parcelamento(db=db,
-                                        parcelamento_id=parcelamento_id)
-
-    finally:
-        db.close()
-
-def listar_parcelamentos():
-
-    db = database._Sessao()
-
-    try:
-        return crud.listar_parcelamentos(db)
     
-    finally:
-        db.close()
+    parcelamentos = crud.listar_parcelamentos()
+
+    for parcelamento in parcelamentos:
+
+        if parcelamento.id == parcelamento_id:
+            return parcelamento
+
+    return None
+
 
 def atualizar_parcelamento(parcelamento_id,descricao=None,valor_total=None,quantidade_parcelas=None):
 
-    db = database._Sessao()
+    parcelamento = buscar_parcelamento(parcelamento_id)
 
-    try:
-        parcelamento = crud.buscar_parcelamento(
-            db=db,
-            parcelamento_id=parcelamento_id)
+    if parcelamento is None:
+        return None
 
-        if not parcelamento:
-            raise ValueError("Parcelamento não encontrado.")
+    if descricao is not None:
+        parcelamento.descricao = descricao
 
-        if valor_total is not None and valor_total <= 0:
-            raise ValueError("O valor total deve ser maior que zero.")
+    if valor_total is not None:
+        parcelamento.valor_total = valor_total
 
-        if quantidade_parcelas is not None and quantidade_parcelas <= 0:
-            raise ValueError(
-                "A quantidade de parcelas deve ser maior que zero."
-            )
+    if quantidade_parcelas is not None:
+        parcelamento.quantidade_parcelas = quantidade_parcelas
 
-        if valor_total is not None:
-            parcelamento.valor_total = valor_total
+    if (
+        valor_total is not None
+        or quantidade_parcelas is not None
+    ):
+        parcelamento.valor_parcela = (
+            parcelamento.valor_total
+            / parcelamento.quantidade_parcelas
+        )
 
-        if quantidade_parcelas is not None:
-            parcelamento.quantidade_parcelas = quantidade_parcelas
+    return crud.atualizar_parcelamento(parcelamento)
 
-        if valor_total is not None or quantidade_parcelas is not None:
-            parcelamento.valor_parcela = (parcelamento.valor_total / parcelamento.quantidade_parcelas)
-
-
-        if descricao is not None:
-            parcelamento.descricao = descricao
-
-        db.commit()
-        db.refresh(parcelamento)
-
-        return parcelamento
-    except Exception:
-        db.rollback()
-        raise
-
-    finally:
-        db.close()
 
 def excluir_parcelamento(parcelamento_id):
+    
 
-    db = database._Sessao()
+    parcelamento = buscar_parcelamento(parcelamento_id)
+
+    if parcelamento is None:
+        return False
+
+    crud.excluir_parcelamento(parcelamento_id)
+
+    return True
 
 
-    try:
-        parcelamento = crud.buscar_parcelamento(
-            db=db,
-            parcelamento_id=parcelamento_id
-        )
 
-        if not parcelamento:
-            raise ValueError("Parcelamento não encontrado.")
+#### PARCELAS ###
 
-        crud.excluir_parcelamento(
-            db=db,
-            parcelamento_id=parcelamento_id
-        )
 
-        db.commit()
+def calcular_parcelas_pendentes(parcelamento_id):
+    
+    parcelas = crud.listar_parcelas()
 
-    except Exception:
-        db.rollback()
-        raise
+    parcelas_parcelamento = [parcela for parcela in parcelas if parcela.parcelamento_id == parcelamento_id]
 
-    finally:
-        db.close()
+    parcelas_pendentes = [
+        parcela
+        for parcela in parcelas_parcelamento
+        if parcela.Status == "Pendente"
+    ]
+
+    return len(parcelas_pendentes)
+
+
+def calcular_parcelas_pagas(parcelamento_id):
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [
+        parcela
+        for parcela in parcelas
+        if parcela.parcelamento_id == parcelamento_id
+    ]
+
+    parcelas_pagas = [
+        parcela
+        for parcela in parcelas_parcelamento
+        if parcela.Status == "Pago"
+    ]
+
+    return len(parcelas_pagas)
+
+
+def obter_proxima_parcela(parcelamento_id):
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [parcela for parcela in parcelas if parcela.parcelamento_id == parcelamento_id]
+
+    parcelas_parcelamento.sort(
+        key=lambda parcela: parcela.numero)
+
+    for parcela in parcelas_parcelamento:
+
+        if parcela.Status == "Pendente":
+            return parcela
+
+    return None
+
+
+def obter_ultima_parcela(parcelamento_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [
+        parcela
+        for parcela in parcelas
+        if parcela.parcelamento_id == parcelamento_id
+    ]
+
+    parcelas_parcelamento.sort(
+        key=lambda parcela: parcela.numero
+    )
+
+    if parcelas_parcelamento:
+        return parcelas_parcelamento[-1]
+
+    return None
+
+
+def obter_parcela(parcelamento_id, numero):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    for parcela in parcelas:
+
+        if (
+            parcela.parcelamento_id == parcelamento_id
+            and parcela.numero == numero
+        ):
+            return parcela
+
+    return None
+
+
+def pagar_parcela(parcela_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    for parcela in parcelas:
+
+        if parcela.id == parcela_id:
+
+            if parcela.Status == "Pago":
+                return parcela
+
+            parcela.Status = "Pago"
+
+            return crud.atualizar_parcela(parcela)
+
+    return None
+
+
+def verificar_parcelamento_quitado(parcelamento_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [
+        parcela
+        for parcela in parcelas
+        if parcela.parcelamento_id == parcelamento_id
+    ]
+
+    if not parcelas_parcelamento:
+        return False
+
+    for parcela in parcelas_parcelamento:
+
+        if parcela.Status != "Pago":
+            return False
+
+    return True
+
+
+def calcular_valor_pendente(parcelamento_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [
+        parcela
+        for parcela in parcelas
+        if parcela.parcelamento_id == parcelamento_id
+    ]
+
+    valor_pendente = 0
+
+    for parcela in parcelas_parcelamento:
+
+        if parcela.Status == "Pendente":
+            valor_pendente += parcela.valor
+
+    return valor_pendente
+
+
+def calcular_valor_pago(parcelamento_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [
+        parcela
+        for parcela in parcelas
+        if parcela.parcelamento_id == parcelamento_id
+    ]
+
+    valor_pago = 0
+
+    for parcela in parcelas_parcelamento:
+
+        if parcela.Status == "Pago":
+            valor_pago += parcela.valor
+
+    return valor_pago
+
+
+def cancelar_parcela(parcela_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    for parcela in parcelas:
+
+        if parcela.id == parcela_id:
+
+            parcela.Status = "Cancelada"
+
+            return crud.atualizar_parcela(parcela)
+
+    return None
+
+
+def cancelar_parcelamento(parcelamento_id):
+    
+
+    parcelas = crud.listar_parcelas()
+
+    parcelas_parcelamento = [
+        parcela
+        for parcela in parcelas
+        if parcela.parcelamento_id == parcelamento_id
+    ]
+
+    for parcela in parcelas_parcelamento:
+
+        if parcela.Status == "Pendente":
+            parcela.Status = "Cancelada"
+
+            crud.atualizar_parcela(parcela)
+
+    return True
+
+
 
 
 
