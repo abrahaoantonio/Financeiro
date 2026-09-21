@@ -33,7 +33,14 @@ class Historico(SQLModel, table=True):
     tipo: Tipos = Field(default=Tipos.ENTRADA)
     valor: float
     data: date= Field(default=date.today())
-    
+
+
+class Investimento(SQLModel, table=True):
+    id: int = Field(primary_key=True)
+    nome: str
+    categoria: str
+    valor: float
+    data: date = Field(default=date.today())
 
 
 sqlite_file_name = 'database.db'
@@ -42,5 +49,9 @@ sqlite_url = f"sqlite:///{sqlite_file_name}"
 engine = create_engine(sqlite_url, echo=True)
 
 
+def criar_tabelas():
+    SQLModel.metadata.create_all(engine)
+
+
 if __name__ == "__main__":  
-    SQLModel.metadata.create_all(engine) 
+    criar_tabelas()
